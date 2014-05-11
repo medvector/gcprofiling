@@ -1,4 +1,9 @@
 from sys import argv
+import matplotlib.pyplot as pl
+import numpy
+
+start_time = (0, 0)
+isfirst = 1
 
 def get_diff_time(time1, time2):
     diff_sec = time2[0] - time1[0]
@@ -8,93 +13,40 @@ def get_diff_time(time1, time2):
         diff_nsec += 1000000
     return (diff_sec, diff_nsec)
 
-def parse(f):
-    isfirst = 1
-    start_time_sec = 0
-    start_time_nsec = 0
-    for line in f:
-        if "total allocated space" in line:
-            test = line.split('::')
-            time_sec = long(test[0].split(' ')[0])
-            time_nsec = long(test[0].split(' ')[2])
-            if isfirst:
-                start_time_sec = time_sec
-                start_time_nsec = time_nsec
-                isfirst = 0
-                x.append(0)
-            else:
-                diff_sec, diff_nsec = get_diff_time((start_time_sec, start_time_nsec), (time_sec, time_nsec))
-                next_time = float(diff_sec) + float(diff_nsec)/1000000 
-                x.append(round(next_time,3))
-            mem =  int(test[1].split('=')[1])
-            y.append(mem)
-        if "total space" in line:
-            test = line.split('::')
-            time_sec = long(test[0].split(' ')[0])
-            time_nsec = long(test[0].split(' ')[2])
-            #print time_sec, time_nsec
-            if isfirst:
-                start_time_sec = time_sec
-                start_time_nsec = time_nsec
-                isfirst = 0
-                x1.append(0)
-            else:
-                diff_sec = time_sec - start_time_sec
-                diff_nsec = time_nsec - start_time_nsec
-                if diff_nsec < 0:
-                    diff_sec = diff_sec - 1
-                    diff_nsec += 1000000
-                next_time = float(diff_sec) + float(diff_nsec)/1000000 
-            mem =  int(test[1].split('=')[1])
-            if mem != -1:
-                z.append(mem)
-                x1.append(round(next_time,3))
-        if "gc invoked" in line:
-            test = line.split('::')
-            time_sec = long(test[0].split(' ')[0])
-            time_nsec = long(test[0].split(' ')[2])
-            if isfirst:
-                start_time_sec = time_sec
-                start_time_nsec = time_nsec
-                isfirst = 0
-                x1.append(0)
-            else:
-                diff_sec = time_sec - start_time_sec
-                diff_nsec = time_nsec - start_time_nsec
-                if diff_nsec < 0:
-                    diff_sec = diff_sec - 1
-                    diff_nsec += 1000000
-                next_time = float(diff_sec) + float(diff_nsec)/1000000 
-                gc_pauses_starts.append(next_time)
-        if "gc finished" in line:
-            test = line.split('::')
-            time_sec = long(test[0].split(' ')[0])
-            time_nsec = long(test[0].split(' ')[2])
-            if isfirst:
-                start_time_sec = time_sec
-                start_time_nsec = time_nsec
-                isfirst = 0
-                x1.append(0)
-            else:
-                diff_sec = time_sec - start_time_sec
-                diff_nsec = time_nsec - start_time_nsec
-                if diff_nsec < 0:
-                    diff_sec = diff_sec - 1
-                    diff_nsec += 1000000
-                next_time = float(diff_sec) + float(diff_nsec)/1000000 
-                gc_pauses_finishes.append(next_time)
-        if "sweeped" in line:
-            test = line.split('::')
-            obj_num = test[1].split()[1]
-            vol = test[1].split()[3]
-            sweeped.append(int(vol))
+def getmem(info):
+    return int(info.split('=')[1])
 
-                  
 
-def draw_plot():
-    import matplotlib.pyplot as pl
-    import numpy
+def get_sweeped_objects(info):
+    obj_num = info.split()[1]
+    vol = info.split()[3]
+    return (int(obj_num), int(vol))
 
+def round_time(time):
+    return round(time, 3)
+
+def parse(file_name, key_line, t, data, transform_time, need_data, getdata):
+    global isfirst
+    global start_time
+    file = open(file_name, "r")
+    for line in file:
+        if key_line in line:
+            time_stamp, info = line.split('::')
+            time = (long(time_stamp.split(' ')[0]), long(time_stamp.split(' ')[2]))
+            if isfirst:
+                start_time = time
+                isfirst = 0
+                t.append(0)
+            else:
+                diff_sec, diff_nsec = get_diff_time(start_time, time)
+                next_time = float(diff_sec) + float(diff_nsec)/1000000 
+                t.append(transform_time(next_time))
+            if need_data:
+                mem =  getdata(info)
+                data.append(mem)
+    file.close()
+
+def draw_plot(x, y, color_scheme, labels, location, plotname):
     fig = pl.figure(figsize=(20,10))
     pl.rc("font", size=35, weight='bold')
     ax = fig.gca()
@@ -105,25 +57,11 @@ def draw_plot():
     for label in ax.get_xticklabels() + ax.get_yticklabels():
         label.set_fontsize(24)
         label.set_bbox(dict(facecolor='white', edgecolor='None', alpha=0.65))
-
-#ax.set_yticks(numpy.arange(0,60000,3000))
-#ax.set_xticks(numpy.arange(0,4,0.2))
-    help = []
-    for i in z:
-        help.append(i*0.75)
     pl.grid(linewidth=3)
-    p1 = pl.plot(x, y, 'r',linewidth=5.0, label="allocated space")
-    p2 = pl.plot(x1, z, 'b',linewidth=5.0, label="total space")
-    #p3 = pl.plot(x1, help, 'g',linewidth=5.0, label="0.75 * total space")
-    #p1 = pl.plot(x, y, 'k',linewidth=5.0, label="allocated space")
-    #p2 = pl.plot(x1, z, 'k--',linewidth=5.0, label="total space")
-    #p3 = pl.plot(x1, help, 'k:',linewidth=5.0, label="0.75 * total space")
-    legend = ax.legend(loc='lower right', shadow=False)
-    pl.savefig(plot_name)
-
-def draw_one_plot():
-    pass
-
+    for i, x_ax in enumerate(x):
+        p1 = pl.plot(x_ax, y[i], color_scheme[i], linewidth=5.0, label=labels[i])
+    legend = ax.legend(loc=location, shadow=False)
+    pl.savefig(plotname)
 
 def stats():
     duration = []
@@ -148,12 +86,10 @@ def stats():
     print "min sweeped = " + str(min(sweeped))
     print "avg sweeped = " + str(numpy.mean(sweeped))
 
-if __name__ == "__main__":
-    log = argv[1]
-    plot_name = argv[2]
+
+def test_drawing():
     sweeped = []
 
-    f = open(log, "r")
     x = []
     x1 = []
     y = []
@@ -161,6 +97,21 @@ if __name__ == "__main__":
 
     gc_pauses_starts = []
     gc_pauses_finishes = []
-    parse(f)
-    draw_plot()
-    f.close()
+    parse(log, "total allocated space", x, y, round_time, True, getmem)
+    parse(log, "total space", x1, z, round_time, True, getmem)
+    parse(log, "gc invoked", gc_pauses_starts, [], (lambda x: x), False, getmem)
+    parse(log, "gc invoked", gc_pauses_finishes, [], (lambda x: x), False, getmem)
+    parse(log, "sweeped", [], sweeped, (lambda x: x), True, get_sweeped_objects)
+
+
+    if z[0] == -1:
+        del(z[0])
+        del(x1[0])
+    draw_plot([x, x1], [y, z], ['r', 'b'], ['allocated space', 'total space'], \
+        'lower right', 'test3.png')    
+
+if __name__ == "__main__":
+    log = argv[1]
+    plot_name = argv[2]
+    test_drawing()
+   
